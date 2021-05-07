@@ -86,6 +86,7 @@ public:
   void DataChanged(const std::string &param);
 
 private:
+  std::string ProctectCmd(char *tmp_cmd, int try_times);
   DBus::Pipe *pipe_;
 };
 
@@ -127,6 +128,7 @@ public:
   std::string SelectSmartCoverDb(int id);
 
 private:
+  std::string ProctectCmd(char *tmp_cmd, int try_times);
   DBus::Pipe *pipe_;
 };
 

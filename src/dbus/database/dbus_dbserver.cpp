@@ -31,46 +31,60 @@ void DBusDbServer::DataChanged(const std::string &param) {
   // NO NEED TODO
 }
 
+std::string DBusDbServer::ProctectCmd(char *tmp_cmd, int try_times) {
+  std::string rst;
+  while (try_times) {
+    try {
+      rst = Cmd(tmp_cmd);
+      break;
+    } catch (DBus::Error err) {
+      LOG_ERROR("%s:try cmd: %s, time:%d, fail\n", __FUNCTION__, tmp_cmd, try_times);
+    }
+    try_times--;
+  }
+  return rst;
+}
+
 std::string DBusDbServer::SelectVideoDb(int id) {
   char tmp[128];
   sprintf(tmp, DB_SELECT_VIDEO_CMD, id);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 std::string DBusDbServer::SelectAudioDb(int id) {
   char tmp[128];
   sprintf(tmp, DB_SELECT_AUDIO_CMD, id);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 std::string DBusDbServer::SelectOsdDb(int region_id) {
   char tmp[128];
   sprintf(tmp, DB_SELECT_OSD_REGION_CMD, region_id);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 std::string DBusDbServer::SelectRoiDb(int region_id) {
   char tmp[128];
   sprintf(tmp, DB_SELECT_ROI_REGION_CMD, region_id);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 std::string DBusDbServer::SelectPortDb(int id) {
   char tmp[128];
   sprintf(tmp, DB_SELECT_PORT_CMD, id);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 std::string DBusDbServer::SelectImageScenarioDb() {
   char tmp[128];
   sprintf(tmp, DB_SELECT_IMAGE_SCENARIO_CMD);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 std::string DBusDbServer::SelectImageEnhanceDb(int id) {
   char tmp[128];
   sprintf(tmp, DB_SELECT_IMAGE_ENHANCEMENT_CMD, id);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 DBusDbListen::DBusDbListen(DBus::Connection &connection)
@@ -102,22 +116,36 @@ void DBusDbEvent::DataChanged(const std::string &param) {
   // NO NEED TODO
 }
 
+std::string DBusDbEvent::ProctectCmd(char *tmp_cmd, int try_times) {
+  std::string rst;
+  while (try_times) {
+    try {
+      rst = Cmd(tmp_cmd);
+      break;
+    } catch (DBus::Error err) {
+      LOG_ERROR("%s:try cmd: %s, time:%d, fail\n", __FUNCTION__, tmp_cmd, try_times);
+    }
+    try_times--;
+  }
+  return rst;
+}
+
 std::string DBusDbEvent::SelectRegionInvade(int id) {
   char tmp[128];
   sprintf(tmp, DB_SELECT_REGION_INVADE_CMD, id);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 std::string DBusDbEvent::SelectMoveDetectDb(int id) {
   char tmp[128];
   sprintf(tmp, DB_SELECT_MOVE_DETECTION_CMD, id);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 std::string DBusDbEvent::SelectSmartCoverDb(int id) {
   char tmp[128];
   sprintf(tmp, DB_SELECT_SMART_COVER_CMD, id);
-  return Cmd(tmp);
+  return ProctectCmd(tmp, -1);
 }
 
 DBusDbEventListen::DBusDbEventListen(DBus::Connection &connection)
