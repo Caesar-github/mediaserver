@@ -7,10 +7,20 @@
 
 #include "flow_export.h"
 #include "mediaserver.h"
+
 #ifdef LINK_VENDOR
 #include "vendor_storage.h"
 #define VENDOR_LINKKIT_LICENSE_ID 255 // max 255
 #define VENDOR_TUYA_LICENSE_ID 254
+#endif
+
+#ifdef ENABLE_CY43438
+#include <termios.h>
+#include <sys/ioctl.h>
+#include <linux/serial.h>
+extern "C"{
+#include  "utils/CY_WL_API/wifi.h"
+}
 #endif
 
 #ifdef LOG_TAG
@@ -33,6 +43,125 @@ shmc::ShmQueue<shmc::SVIPC> queue_w_;
 #endif
 
 static void parse_args(int argc, char **argv);
+
+#ifdef ENABLE_CY43438
+static void *CY43438WifiInit(void *arg) {
+  LOG_INFO("WIFI_Init begin\n");
+  int ret = WIFI_Init();
+	if (ret) {
+		LOG_ERROR("WIFI_Init, err = %d\n", ret);
+		return NULL;
+	}
+  LOG_INFO("WIFI_Init success\n");
+
+  ret = WIFI_Resume();
+	if (ret) {
+		LOG_ERROR("resume_enter, err = %d\n", ret);
+		return NULL;
+	}
+  LOG_INFO("WIFI_Resume success\n");
+
+  ret = WIFI_GetStatus();
+	if (ret) { //if (wl_is_associated())
+		LOG_INFO("Already joined AP.\n");
+		rk_obtain_ip_from_vendor((char *)"wlan0");
+    LOG_INFO("rk_obtain_ip_from_vendor over.\n");
+    system("aplay /etc/connect_success.wav &");
+    // system("ping 111.231.160.125 -c 3 > /dev/kmsg 2>&1 & ");
+	} else {
+    LOG_INFO("Not joined AP.\n");
+    wifi_info_s wifi_info;
+    LOG_INFO("get dhcp info from vendor\n");
+    ret = rkvendor_read(VENDOR_WIFI_INFO_ID, (char *)&wifi_info, sizeof(wifi_info));
+    if (ret) {
+      system("aplay /etc/no_connect_net.wav &");
+      return NULL;
+    }
+
+	  LOG_INFO("ssid:%s, psk:%s, ip_addr: %s, netmask: %s, gateway: %s, dns: %s\n",
+		          wifi_info.ssid, wifi_info.psk, wifi_info.ip_addr, wifi_info.netmask, wifi_info.gateway, wifi_info.dns);
+    if (strlen(wifi_info.ssid) && strlen(wifi_info.psk)) {
+      if (WIFI_Connect(wifi_info.ssid, wifi_info.psk, 0)) {
+        LOG_ERROR("WIFI_Connect fail\n");
+        system("aplay /etc/connect_fail.wav &");
+        return NULL;
+      }
+      LOG_INFO("WIFI_Connect success\n");
+      if (rk_obtain_ip_from_udhcpc((char *)"wlan0")) {
+        LOG_ERROR("obtain_ip fail\n");
+        system("aplay /etc/connect_fail.wav &");
+      } else {
+        LOG_INFO("obtain_ip success\n");
+        system("aplay /etc/connect_success.wav &");
+      }
+    }
+	}
+
+  return NULL;
+}
+
+static void uart_to_mcu_poweroff() {
+  int fd;
+  int baud = B115200;
+  struct termios newtio;
+	struct serial_rs485 rs485;
+
+	fd = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);
+	if (fd < 0) {
+		LOG_ERROR("Error opening serial port\n");
+		return;
+	}
+
+	bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
+
+	/* man termios get more info on below settings */
+	newtio.c_cflag = baud | CS8 | CLOCAL | CREAD;
+	newtio.c_iflag = 0;
+	newtio.c_oflag = 0;
+	newtio.c_lflag = 0;
+	// block for up till 128 characters
+	newtio.c_cc[VMIN] = 128;
+	// 0.5 seconds read timeout
+	newtio.c_cc[VTIME] = 5;
+	/* now clean the modem line and activate the settings for the port */
+	tcflush(fd, TCIOFLUSH);
+	tcsetattr(fd,TCSANOW,&newtio);
+  if(ioctl(fd, TIOCGRS485, &rs485) >= 0) {
+    /* disable RS485 */
+    rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
+    rs485.delay_rts_after_send = 0;
+    rs485.delay_rts_before_send = 0;
+    if(ioctl(fd, TIOCSRS485, &rs485) < 0) {
+      perror("Error setting RS-232 mode");
+    }
+	}
+
+  /*
+  * The flag ASYNC_SPD_CUST might have already been set, so
+  * clear it to avoid confusing the kernel uart dirver.
+  */
+  struct serial_struct ss;
+	if (ioctl(fd, TIOCGSERIAL, &ss) < 0) {
+		// return silently as some devices do not support TIOCGSERIAL
+    LOG_INFO("return silently as some devices do not support TIOCGSERIAL\n");
+		return;
+	}
+	// if ((ss.flags & ASYNC_SPD_MASK) != ASYNC_SPD_CUST)
+	// 	return;
+	ss.flags &= ~ASYNC_SPD_MASK;
+	if (ioctl(fd, TIOCSSERIAL, &ss) < 0) {
+		LOG_ERROR("TIOCSSERIAL failed");
+		return;
+	}
+
+  // write
+  int written = write(fd, "\x11\x26", 4);
+  if (written < 0)
+    LOG_ERROR("write()");
+  else
+    LOG_INFO("written is %d\n", written);
+}
+#endif // ENABLE_CY43438
 
 namespace rockchip {
 namespace mediaserver {
@@ -70,10 +199,10 @@ int MediaServer::InitMediaLink() {
 #elif defined LINK_API_ENABLE_TUYA
 #ifdef LINK_VENDOR
       char vendor_data[256] = {0};
-      while (rkvendor_read(VENDOR_TUYA_LICENSE_ID, vendor_data,
+      if (rkvendor_read(VENDOR_TUYA_LICENSE_ID, vendor_data,
                            sizeof(vendor_data) / sizeof(vendor_data[0]))) {
-        LOG_INFO("rkvendor_read fail, retry\n");
-        usleep(100000);
+        LOG_INFO("rkvendor_read fail\n");
+        system("aplay /etc/no_key.wav &");
       }
       LOG_INFO("vendor_data is %s\n", vendor_data);
       nlohmann::json license_js = nlohmann::json::parse(vendor_data);
@@ -141,6 +270,11 @@ int MediaServer::RegisterDbusProxy(FlowManagerPtr &flow_manager) {
 
 MediaServer::MediaServer() {
   LOG_DEBUG("media servers setup ...\n");
+#ifdef ENABLE_CY43438
+  pthread_t thread_id;
+  pthread_create(&thread_id, NULL, CY43438WifiInit, NULL);
+#endif
+
 #ifdef ENABLE_DBUS
   InitDbusServer();
 #endif
@@ -223,6 +357,7 @@ MediaServer::~MediaServer() {
 static void sigterm_handler(int sig) {
   fprintf(stderr, "signal %d\n", sig);
   LOG_DEINIT();
+
 #ifdef LINK_API_ENABLE
 #ifdef THUNDER_BOOT
   // StopRecord(0);
@@ -230,8 +365,12 @@ static void sigterm_handler(int sig) {
   auto &link_manager = rockchip::mediaserver::LinkManager::GetInstance();
   if (link_manager) {
     link_manager->ReportWakeUpData1();
-    // link_manager->StopLink();
-    // link_manager->DeInitDevice();
+#ifdef ENABLE_CY43438
+    if (sig == SIGQUIT)
+      uart_to_mcu_poweroff();
+#endif
+    link_manager->StopLink();
+    link_manager->DeInitDevice();
   }
 
 #ifdef LINK_API_ENABLE_LINKKIT

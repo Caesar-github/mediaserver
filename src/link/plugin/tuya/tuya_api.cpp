@@ -6,6 +6,13 @@
 
 #include "flow_common.h"
 #include "flow_unit.h"
+#include "thread.h"
+
+#ifdef ENABLE_CY43438
+extern "C"{
+#include  "../../../utils/CY_WL_API/wifi.h"
+}
+#endif
 
 #ifdef LOG_TAG
 #undef LOG_TAG
@@ -22,6 +29,7 @@
 #define IPC_APP_VERSION "1.2.3"
 // TUYA P2P supports 5 users at the same time, include live preview and playback
 #define MAX_P2P_USER 5
+#define TUYA_DP_DOOR_STATUS 149
 
 namespace rockchip {
 namespace mediaserver {
@@ -192,6 +200,7 @@ void __IPC_APP_Get_Net_Status_cb(unsigned char stat) {
   switch (stat) {
   case STAT_CLOUD_CONN:  // for wifi ipc
   case STAT_MQTT_ONLINE: // for low-power wifi ipc
+  case GB_STAT_CLOUD_CONN: // for wired ipc
   {
     // IPC_APP_Notify_LED_Sound_Status_CB(IPC_MQTT_ONLINE);
     LOG_INFO("mqtt is online\r\n");
@@ -469,30 +478,52 @@ int TuyaApi::FillLicenseKey(pLicenseKey plicense) {
   return 0;
 }
 
+static void *p2p_init(void *arg) {
+  auto os = reinterpret_cast<TuyaApi *>(arg);
+  // char thread_name[40];
+  // snprintf(thread_name, sizeof(thread_name), "p2p_init");
+  // prctl(PR_SET_NAME, thread_name);
+
+  /* Enable TUYA P2P service after the network is CONNECTED.
+     Note: For low-power camera, invoke this API as early as possible(can be
+     before mqtt online) */
+  LOG_INFO("TUYA_APP_Enable_P2PTransfer begin\n");
+  os->TUYA_APP_Enable_P2PTransfer(MAX_P2P_USER);
+  LOG_INFO("TUYA_APP_Enable_P2PTransfer over\n");
+
+  return 0;
+}
+
 int TuyaApi::InitDevice() {
   LOG_INFO("before init tuya\n");
   if (g_init) {
     printf("tuya already init\n");
     return 0;
   }
-  WIFI_INIT_MODE_E mode = WIFI_INIT_AUTO;
+
+  WIFI_INIT_MODE_E mode = WIFI_INIT_AUTO; // for wired and wifi qrcode
   // The demo mode is set to WIFI_INIT_DEBUG,
   // token needs to be scanned with WeChat to get a ten-minute valid.
   // so before running this main process,
   // developers need to make sure that devices are connected to the Internet.
+#if 1
   IPC_APP_Init_SDK(mode, NULL);
+#else
+  IPC_APP_Init_SDK(WIFI_INIT_DEBUG, "AYgTyyjwMfeZ2W");
+#endif
   LOG_INFO("after IPC_APP_Init_SDK\n");
-  MediaControl(IPC_MEDIA_START, NULL);
 
-  /* Enable TUYA P2P service after the network is CONNECTED.
-     Note: For low-power camera, invoke this API as early as possible(can be
-     before mqtt online) */
-  TUYA_APP_Enable_P2PTransfer(MAX_P2P_USER);
+  Thread::UniquePtr p2p_init_thread;
+  p2p_init_thread.reset(new Thread(p2p_init, this));
+
+
+  MediaControl(IPC_MEDIA_START, NULL);
 
   /* whether SDK is connected to MQTT */
   while (cloud_connected_ != 1) {
     usleep(100000);
   }
+
   TUYA_APP_LOW_POWER_DISABLE(); // report device online
   /*At least one system time synchronization after networking*/
   IPC_APP_Sync_Utc_Time();
@@ -511,11 +542,11 @@ int TuyaApi::InitDevice() {
 }
 
 int TuyaApi::DeInitDevice() {
+  LOG_INFO("DeInitDevice\n");
   if (!g_init) {
     LOG_ERROR("Tuya device is not init\n");
     return -1;
   }
-  LOG_INFO("DeInitDevice\n");
 
   return 0;
 }
@@ -578,35 +609,7 @@ static unsigned char s_wakeup_data[32] = {0};
 static unsigned int s_heartbeat_len = 32;
 static unsigned char s_heartbeat_data[32] = {0};
 static unsigned int s_wakeup_len = 32;
-static int s_wakeup_fd = -1;
-
-#define TUYA_DP_DOOR_STATUS 149
-
-static void demo_mqtt_to_wifi(void) {
-  int fd, size;
-  char buf[200];
-
-  // fd = open("/sys/kernel/debug/tcp_keepalive_param/tcp_param", O_RDONLY);
-  fd = open("/proc/tcp_params", O_RDONLY);
-  memset(buf, 0, 200);
-  size = read(fd, buf, 200);
-  printf("[3 tcp_param: %d]: %s\n", size, buf);
-  system(buf);
-  usleep(300 * 100);
-  system("dhd_priv wl tcpka_conn_sess_info 1");
-  usleep(300 * 100);
-  system("dhd_priv wl tcpka_conn_dump 1");
-
-  system("dhd_priv wl tcpka_conn_sess_info 1");
-  usleep(100 * 100);
-  system("dhd_priv wl tcpka_conn_dump 0");
-  usleep(100 * 100);
-  system("dhd_priv wl tcpka_conn_enable 1 1 120 3 8");
-  usleep(100 * 100);
-  system("dhd_priv setsuspendmode 1");
-  usleep(100 * 100);
-  system("tb_poweroff &");
-}
+static int s_mqtt_socket_fd = -1;
 
 int TuyaApi::TUYA_APP_LOW_POWER_ENABLE() {
   LOG_INFO("tuya low power mode enable\n");
@@ -629,12 +632,25 @@ int TuyaApi::TUYA_APP_LOW_POWER_ENABLE() {
     return ret;
   }
 
+  // Get fd for server to wakeup
+  s_mqtt_socket_fd = tuya_ipc_get_mqtt_socket_fd();
+  if (-1 == s_mqtt_socket_fd) {
+    LOG_ERROR("tuya_ipc_get_mqtt_socket_fd failed\n");
+    return ret;
+  }
+  LOG_INFO("s_mqtt_socket_fd is %d\n", s_mqtt_socket_fd);
+
+#ifdef ENABLE_CY43438
+  ret = WIFI_Suspend(s_mqtt_socket_fd, true);
+  LOG_INFO("WIFI_Suspend, ret is %d\n", ret);
+#endif
+
   ret = tuya_ipc_get_wakeup_data(s_wakeup_data, &s_wakeup_len);
   if (OPRT_OK != ret) {
     LOG_ERROR("tuya_ipc_get_wakeup_data failed\n");
     return ret;
   }
-  LOG_INFO("s_wakeup_data is \n\n\n");
+  LOG_INFO("s_wakeup_data is \n");
   for (int i = 0; i < s_wakeup_len; i++) {
     printf("%x ", s_wakeup_data[i]);
   }
@@ -645,20 +661,11 @@ int TuyaApi::TUYA_APP_LOW_POWER_ENABLE() {
     LOG_ERROR("tuya_ipc_get_heartbeat_data failed\n");
     return ret;
   }
-  LOG_INFO("s_heartbeat_data is \n\n\n");
+  LOG_INFO("s_heartbeat_data is \n");
   for (int i = 0; i < s_heartbeat_len; i++) {
     printf("%x ", s_heartbeat_data[i]);
   }
   printf("\n");
-
-  // Get fd for server to wakeup
-  s_wakeup_fd = tuya_ipc_get_mqtt_socket_fd();
-  if (-1 == s_wakeup_fd) {
-    LOG_ERROR("tuya_ipc_get_mqtt_socket_fd failed\n");
-    return ret;
-  }
-
-  demo_mqtt_to_wifi();
 
   return ret;
 }

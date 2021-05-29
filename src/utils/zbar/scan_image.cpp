@@ -19,6 +19,12 @@
 #endif
 #endif
 
+#ifdef ENABLE_CY43438
+extern "C"{
+#include "../CY_WL_API/wifi.h"
+}
+#endif
+
 #ifdef LOG_TAG
 #undef LOG_TAG
 #endif
@@ -67,15 +73,19 @@ static void nv12_bar_process(unsigned char *buffer, unsigned int buffer_size,
     int ret = rkbar_init(&rkbar_hand);
     if (ret == -1) {
       LOG_INFO("rkbar init is err");
-      return;
+      goto out;
     }
 
     ret = rkbar_scan(rkbar_hand, img);
     if (ret > 0) {
       ready_scan_ = 0;
       retry_time_ = SCAN_RETRY_TIME;
-      const char *data = rkbar_getresult(rkbar_hand);
+      const char *test = rkbar_getresult(rkbar_hand);
+      char *data;
+      data = (char*)malloc(strlen(test));
+      memcpy(data, test, strlen(test));
       LOG_INFO("rkbar the decoding result is \" %s \" \n", data);
+      system("aplay /etc/qr_recognized.wav &");
 #ifdef LINK_API_ENABLE_LINKKIT
 #ifdef THUNDER_BOOT
       // connect wifi
@@ -90,14 +100,42 @@ static void nv12_bar_process(unsigned char *buffer, unsigned int buffer_size,
       tuya_ipc_direct_connect(data, TUYA_IPC_DIRECT_CONNECT_QRCODE);
 #ifdef THUNDER_BOOT
       // connect wifi
-      char ssid[20], psk[20], cmd[100];
+      char ssid[20], psk[20], cmd[100], wifi_ssid[20], wifi_psk[20];
       sscanf(data, "%*[^:]:%[^,],%*[^:]:%[^,]", psk, ssid);
-      system("killall tb_start_wifi.sh");
-      sprintf(cmd, "tb_start_wifi.sh %s %s true &", ssid, psk);
+      memset(wifi_ssid, 0, 20);
+      memset(wifi_psk, 0, 20);
+      memcpy(wifi_ssid, &ssid[1], strlen(ssid) - 2);
+      memcpy(wifi_psk, &psk[1], strlen(psk) - 2);
+#ifdef ENABLE_CY43438 //ENABLE_CY43438
+      LOG_INFO("WIFI_Connect %s %s\n", wifi_ssid, wifi_psk);
+      if (WIFI_Connect(wifi_ssid, wifi_psk, 0)) {
+        LOG_ERROR("WIFI_Connect fail\n");
+        system("aplay /etc/connect_fail.wav &");
+        goto out;
+      }
+      if (rk_obtain_ip_from_udhcpc("wlan0")) {
+        LOG_ERROR("obtain_ip fail\n");
+        system("aplay /etc/connect_fail.wav &");
+        goto out;
+      }
+      system("aplay /etc/connect_success.wav &");
+#else
+      system("cp /etc/wpa_supplicant.conf /tmp");
+      sprintf(cmd, "s/SSID/%s/g", ssid);
       LOG_INFO("cmd is %s\n", cmd);
       system(cmd);
+      sprintf(cmd, "s/PASSWORD/%s/g", psk);
+      LOG_INFO("cmd is %s\n", cmd);
+      system(cmd);
+      system("wpa_supplicant -B -i wlan0 -c /tmp/wpa_supplicant.conf");
+      usleep(1000 * 1000);
+      system("udhcpc -i wlan0");
+#endif
+
 #endif // THUNDER_BOOT
 #endif
+      if (data)
+        free(data);
     } else {
       retry_time_--;
       if (retry_time_ == 0) {
@@ -108,8 +146,10 @@ static void nv12_bar_process(unsigned char *buffer, unsigned int buffer_size,
 #endif // THUNDER_BOOT
       }
     }
-
+out:
     rkbar_deinit(rkbar_hand);
+    if (img->bin)
+      free(img->bin);
     if (img)
       free(img);
   }

@@ -368,7 +368,7 @@ int FlowManager::UnRegisterRtspHandler(int pipe_index) {
   return 0;
 }
 
-#ifdef USE_ROCKFACE
+#if (defined(USE_ROCKFACE) || defined(USE_ROCKX))
 
 int FlowManager::CreateNNHandler() {
   nn_handler_ = std::make_shared<NNHandler>();
@@ -428,14 +428,14 @@ int FlowManager::CreatePipes() {
     flow_pipe->RegisterCallBack();
   }
   RegisterRtspHandler();
-#ifdef USE_ROCKFACE
+#if (defined(USE_ROCKFACE) || defined(USE_ROCKX))
   CreateNNHandler();
 #endif
   return 0;
 }
 
 int FlowManager::DestoryPipes() {
-#ifdef USE_ROCKFACE
+#if (defined(USE_ROCKFACE) || defined(USE_ROCKX))
   DestoryNNHandler();
 #endif
   UnRegisterRtspHandler();
@@ -485,7 +485,7 @@ int FlowManager::ResetFlow(int id, int flow_index) {
   auto flow_unit = flow_pipe->GetFlowunit(flow_index);
   SyncConfig();
 // Deinit
-#ifdef USE_ROCKFACE
+#if (defined(USE_ROCKFACE) || defined(USE_ROCKX))
   DestoryNNHandler();
 #endif
   UnRegisterRtspHandler(id);
@@ -505,7 +505,7 @@ int FlowManager::ResetFlow(int id, int flow_index) {
   flow_pipe->BindControler();
   flow_pipe->RegisterCallBack();
   RegisterRtspHandler(id);
-#ifdef USE_ROCKFACE
+#if (defined(USE_ROCKFACE) || defined(USE_ROCKX))
   CreateNNHandler();
 #endif
   return 0;

@@ -161,7 +161,7 @@ OPERATE_RET hwl_wf_sniffer_set(IN CONST BOOL_T en,
 *  Return:   OPRT_OK: success  Other: fail
 ***********************************************************/
 OPERATE_RET hwl_wf_get_ip(IN CONST WF_IF_E wf, OUT NW_IP_S *ip) {
-  printf("+++%s\n", __FUNCTION__);
+  printf("+++%s, wf is %d\n", __FUNCTION__, wf);
   if (NULL == ip) {
     return OPRT_INVALID_PARM;
   }
@@ -173,15 +173,15 @@ OPERATE_RET hwl_wf_get_ip(IN CONST WF_IF_E wf, OUT NW_IP_S *ip) {
   }
 
   if (wf == WF_STATION) {
-    // // get the ip of ethernet
-    // hwl_get_local_ip_info(NET_DEV, ip);
+    // get the ip of ethernet
+    hwl_get_local_ip_info(NET_DEV, ip);
 
     NW_IP_S tmp;
     memset(&tmp, 0, sizeof(NW_IP_S));
     // get the ip of wifi
     hwl_get_local_ip_info(WLAN_DEV, &tmp);
     if (strlen(tmp.ip)) {
-      // replace ip
+      // if wifi ip exist, replace ip
       memcpy(ip, &tmp, sizeof(NW_IP_S));
     }
   }
@@ -456,4 +456,10 @@ OPERATE_RET hwl_wf_set_country_code(IN CONST CHAR_T *p_country_code) {
 OPERATE_RET hwl_wf_network_mode(OUT WF_NETWORK_MODE_E *mode) {
   printf("+++%s\n", __FUNCTION__);
   return 0;
+}
+
+VOID tuya_ipc_get_snapshot_cb(char* pjbuf, unsigned int* size)
+{
+  printf("+++%s\n", __FUNCTION__);
+  //get_motion_snapshot(pjbuf,size);
 }

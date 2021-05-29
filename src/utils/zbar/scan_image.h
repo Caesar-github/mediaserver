@@ -7,6 +7,7 @@
 
 #include "server.h"
 #include "thread.h"
+#include "rkbar_scan_api.h"
 
 namespace rockchip {
 namespace mediaserver {

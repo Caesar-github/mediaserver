@@ -784,6 +784,8 @@ void SetRockXNNResultInput(RknnResult *result, int size) {
   auto nn_handler = flow_manager->GetNNHander();
   if (nn_handler)
     nn_handler->RockXNNResultInput(result, size);
+  else
+    LOG_DEBUG("nn_handler is null\n");
 }
 
 void SetRockxStatus(std::string model_name, int status) {

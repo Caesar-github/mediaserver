@@ -7,8 +7,6 @@
 #include "tuya_cloud_types.h"
 #include "tuya_ipc_api.h"
 #include "tuya_ipc_media.h"
-#include "tuya_ipc_media.h"
-#include "tuya_ipc_p2p.h"
 #include "tuya_ipc_p2p.h"
 #include "tuya_ring_buffer.h"
 #include "wifi_hwl.h"
