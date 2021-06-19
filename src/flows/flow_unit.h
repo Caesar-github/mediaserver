@@ -138,6 +138,7 @@ public:
 
   // flow & stream audio param
   std::string GetChannel();
+  std::string GetSampleFormat();
   std::string GetSampleRate();
 
   void SetChannel(std::string value);

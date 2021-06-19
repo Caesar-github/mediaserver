@@ -233,6 +233,7 @@ int TuyaApi::IPC_APP_Init_SDK(WIFI_INIT_MODE_E init_mode, char *p_token) {
   // env.gw_rst_cb = IPC_APP_Reset_System_CB;
   // env.gw_restart_cb = IPC_APP_Restart_Process_CB;
   env.mem_save_mode = FALSE;
+  LOG_INFO("tuya_ipc_init_sdk\n");
   tuya_ipc_init_sdk(&env);
 
   LOG_INFO("init_mode is %d, p_token is %s\n", init_mode, p_token);
@@ -455,7 +456,7 @@ int TuyaApi::TUYA_APP_Enable_P2PTransfer(IN UINT_T max_users) {
   p2p_var.online_cb = __depereated_online_cb;
   p2p_var.on_rev_audio_cb = __TUYA_APP_rev_audio_cb;
   /*speak data format  app->ipc*/
-  p2p_var.rev_audio_codec = TUYA_CODEC_AUDIO_G711U;
+  p2p_var.rev_audio_codec = TUYA_CODEC_AUDIO_PCM;
   p2p_var.audio_sample = TUYA_AUDIO_SAMPLE_8K;
   p2p_var.audio_databits = TUYA_AUDIO_DATABITS_16;
   p2p_var.audio_channel = TUYA_AUDIO_CHANNEL_MONO;
@@ -581,15 +582,15 @@ void TuyaApi::PushVideoHandler(unsigned char *buffer, unsigned int buffer_size,
   TUYA_APP_Put_Frame(E_CHANNEL_VIDEO_MAIN, &h264_frame);
 }
 
-static MEDIA_FRAME_S g711a_frame;
+static MEDIA_FRAME_S pcm_frame;
 void TuyaApi::PushAudioHandler(unsigned char *buffer, unsigned int buffer_size,
                                int64_t present_time) {
-  memset(&g711a_frame, 0, sizeof(g711a_frame));
-  g711a_frame.type = E_AUDIO_FRAME;
-  g711a_frame.p_buf = buffer;
-  g711a_frame.size = buffer_size;
-  g711a_frame.pts = present_time;
-  TUYA_APP_Put_Frame(E_CHANNEL_AUDIO, &g711a_frame);
+  memset(&pcm_frame, 0, sizeof(pcm_frame));
+  pcm_frame.type = E_AUDIO_FRAME;
+  pcm_frame.p_buf = buffer;
+  pcm_frame.size = buffer_size;
+  pcm_frame.pts = present_time;
+  TUYA_APP_Put_Frame(E_CHANNEL_AUDIO, &pcm_frame);
 }
 
 void TuyaApi::PushCaptureHandler(unsigned char *buffer,

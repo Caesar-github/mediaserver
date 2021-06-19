@@ -632,6 +632,15 @@ std::string FlowUnit::GetChannel() {
   return channel;
 }
 
+std::string FlowUnit::GetSampleFormat() {
+  std::string sample_format =
+      GetPropByName(stream_param_props_, NODE_STREAM_PARAM_SAMPLE_FORMAT);
+  if (sample_format.empty()) {
+    LOG_WARN("flow %s no found node sample_format\n", flow_name_.c_str());
+  }
+  return sample_format;
+}
+
 std::string FlowUnit::GetSampleRate() {
   std::string sample_rate =
       GetPropByName(stream_param_props_, NODE_STREAM_PARAM_SAMPLE_RATE);

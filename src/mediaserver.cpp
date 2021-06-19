@@ -203,6 +203,7 @@ int MediaServer::InitMediaLink() {
                            sizeof(vendor_data) / sizeof(vendor_data[0]))) {
         LOG_INFO("rkvendor_read fail\n");
         system("aplay /etc/no_key.wav &");
+        return -1;
       }
       LOG_INFO("vendor_data is %s\n", vendor_data);
       nlohmann::json license_js = nlohmann::json::parse(vendor_data);

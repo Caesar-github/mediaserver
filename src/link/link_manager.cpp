@@ -145,30 +145,20 @@ int LinkManager::FillMediaParam() {
     auto link_flow = audio_pipe->GetFlowByInput(StreamType::LINK, "audio:");
     if (link_flow) {
       LOG_INFO("link_flow find audio\n");
-      auto enc_flow_unit = audio_pipe->GetFlowunit(StreamType::AUDIO_ENCODER);
-      if (enc_flow_unit) {
-        auto flow = enc_flow_unit->GetFlow();
+      auto audio_flow_unit = audio_pipe->GetFlowunit(StreamType::AUDIO);
+      if (audio_flow_unit) {
+        auto flow = audio_flow_unit->GetFlow();
+        FillMediaParam(MEDIA_PARAM_AUDIO_FMT, MEDIA_PARAM_AUDIO_FORMAT_PCM);
 
-        std::string enc_output_data_type = enc_flow_unit->GetOutputDataType();
-        if (enc_output_data_type.find("g711a") != std::string::npos)
-          FillMediaParam(MEDIA_PARAM_AUDIO_FMT, MEDIA_PARAM_AUDIO_FORMAT_G711A);
-        else if (enc_output_data_type.find("mp3") != std::string::npos)
-          FillMediaParam(MEDIA_PARAM_AUDIO_FMT, MEDIA_PARAM_AUDIO_FORMAT_MP3);
-        else
-          FillMediaParam(MEDIA_PARAM_AUDIO_FMT, MEDIA_PARAM_AUDIO_FORMAT_PCM);
-
-        std::string input_data_type = enc_flow_unit->GetInputDataType();
-        if (input_data_type.find("s16") != std::string::npos)
+        std::string sample_format = audio_flow_unit->GetSampleFormat();
+        if (sample_format.find("audio:pcm_s16") != std::string::npos)
           FillMediaParam(MEDIA_PARAM_AUDIO_SAMPLE_BITS,
                          MEDIA_PARAM_AUDIO_SAMPLE_BITS_16BIT);
-        else if (input_data_type.find("s8") != std::string::npos)
-          FillMediaParam(MEDIA_PARAM_AUDIO_SAMPLE_BITS,
-                         MEDIA_PARAM_AUDIO_SAMPLE_BITS_8BIT);
         else
           FillMediaParam(MEDIA_PARAM_AUDIO_SAMPLE_BITS,
                          MEDIA_PARAM_AUDIO_SAMPLE_BITS_8BIT);
 
-        auto value = enc_flow_unit->GetSampleRate();
+        auto value = audio_flow_unit->GetSampleRate();
         if (!value.empty()) {
           int sample_rate = atoi(value.c_str());
           if (sample_rate == 8000)
@@ -191,7 +181,7 @@ int LinkManager::FillMediaParam() {
                          MEDIA_PARAM_AUDIO_SAMPLE_RATE_8000);
         }
 
-        value = enc_flow_unit->GetChannel();
+        value = audio_flow_unit->GetChannel();
         if (!value.empty()) {
           int channel = atoi(value.c_str());
           if (channel == 1)
