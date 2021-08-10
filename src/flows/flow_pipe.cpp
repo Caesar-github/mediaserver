@@ -525,7 +525,7 @@ int FlowPipe::CreateFlow(std::shared_ptr<FlowUnit> flow_unit) {
         aud_param = GetStreamParam(StreamType::AUDIO_ENCODER);
     }
     LOG_DEBUG("vid_param: %s, aud_param: %s\n", (char *)vid_param.c_str(), (char *)aud_param.c_str());
-    param = easymedia::JoinFlowParam(flow_param, 2, aud_param, vid_param);
+    param = easymedia::JoinFlowParam(flow_param, 2, vid_param, aud_param);
   } else {
     param = easymedia::JoinFlowParam(flow_param, 1, stream_param);
   }
