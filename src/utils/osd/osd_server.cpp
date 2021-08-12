@@ -630,7 +630,7 @@ int OSDServer::UpdateText() {
     OsdRegionData *osd_region_data = &region_data_[region_id];
     // get temp
     int fd;
-    char temp_buf[5];
+    char temp_buf[6];
     fd = open("/sys/class/thermal/thermal_zone0/temp", O_RDONLY);
     if (fd < 0) {
       LOG_ERROR("failed to open /sys/class/thermal/thermal_zone0/temp\n");

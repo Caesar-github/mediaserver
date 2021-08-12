@@ -704,7 +704,11 @@ int FlowManager::SchedulesManagerIsRunning() {
 void FlowManager::SyncSchedulesConfig() {
   LOG_INFO("Sync Schedules Manager\n");
   pthread_mutex_lock(&schedule_mutex);
-  LOG_DEBUG("running_status: %d, is_running:%d\n", schedules_manager_->running_status(), schedules_manager_->running_flag_);
+  if (schedules_manager_) {
+    LOG_DEBUG("running_status: %d, is_running:%d\n", schedules_manager_->running_status(), schedules_manager_->running_flag_);
+  } else {
+    LOG_DEBUG("schedules_manager_ is null\n");
+  }
   if (schedules_manager_ && schedules_manager_->running_status()) {
     schedules_manager_->SyncSchedulesConfig();
   } else {
@@ -719,7 +723,11 @@ void FlowManager::SyncSchedulesConfig() {
 void FlowManager::StopSchedules() {
   LOG_INFO("Stop Schedules Manager\n");
   pthread_mutex_lock(&schedule_mutex);
-  LOG_DEBUG("running_status: %d, is_running:%d\n", schedules_manager_->running_status(), schedules_manager_->running_flag_);
+  if (schedules_manager_) {
+    LOG_DEBUG("running_status: %d, is_running:%d\n", schedules_manager_->running_status(), schedules_manager_->running_flag_);
+  } else {
+    LOG_DEBUG("schedules_manager_ is null\n");
+  }
   if (schedules_manager_ && schedules_manager_->running_status()) {
     schedules_manager_->stop();
   }
