@@ -673,9 +673,11 @@ void FlowManager::InitScheduleMutex() {
 void FlowManager::CreateSchedules() {
   LOG_INFO("Create Schedules Manager\n");
   pthread_mutex_lock(&schedule_mutex);
-  schedules_manager_.reset(new SchedulesManager());
-  if (schedules_manager_) {
-    schedules_manager_->start();
+  if (!schedules_manager_) {
+    schedules_manager_.reset(new SchedulesManager());
+    if (schedules_manager_) {
+      schedules_manager_->start();
+    }
   }
   pthread_mutex_unlock(&schedule_mutex);
 }

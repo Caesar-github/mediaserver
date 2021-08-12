@@ -65,16 +65,12 @@ void SchedulesManager::SyncTime() {
 void SchedulesManager::SyncSchedulesConfig() {
   LOG_DEBUG("sync schedules config\n");
   // sync record plan
-  if (!timed_video_enabled_)
-    return;
   dbserver_storage_video_plan_parse(&timed_video_enabled_);
   memset(schedule_video_, 0, sizeof(struct week));
   dbserver_event_schedules_parse(schedule_video_,
                                  DB_SCHEDULES_ID_STORAGE_VIDEO_PLAN);
   LOG_DEBUG("timed record ebaled is %d\n", timed_video_enabled_);
   // sync snap plan
-  if (!timed_snap_interval_)
-    return;
   dbserver_storage_snap_plan_parse(0, &timed_snap_enabled_,
                                    &timed_snap_quality_, &timed_snap_interval_,
                                    NULL);
@@ -83,8 +79,6 @@ void SchedulesManager::SyncSchedulesConfig() {
   LOG_DEBUG("timed snap ebaled is %d, quality is %d, interval is %d\n",
             timed_snap_enabled_, timed_snap_quality_, timed_snap_interval_);
   // sync move detect plan
-  if (!md_record_enabled_)
-    return;
   dbserver_event_triggers_parse(0, &md_record_enabled_);
   memset(schedule_md_, 0, sizeof(struct week));
   dbserver_event_schedules_parse(schedule_md_, DB_SCHEDULES_ID_MOTION_DETECT);
@@ -232,8 +226,9 @@ static void *ManagerProcess(void *arg) {
     // check video plan every second
     if (os->timed_snap_enabled_)
       os->CheckPhotoPlan();
-    if ((!os->timed_video_enabled_) && (!os->timed_snap_enabled_)) {
-      LOG_DEBUG("timed record and snap are disabled, schedules manager exit\n");
+
+    if ((!os->timed_video_enabled_) && (!os->timed_snap_enabled_) && (!os->md_record_enabled_)) {
+      LOG_DEBUG("timed record, snap and md are disabled, schedules manager exit\n");
       break;
     } else {
       os->running_flag_ = 1;
@@ -250,6 +245,7 @@ static void *ManagerProcess(void *arg) {
   LOG_DEBUG("Schedules ManagerProcess out\n");
   if (GetRecordStatus(os->record_stream_id_))
     StopRecord(os->record_stream_id_);
+  // os->thread_quit();
   os->running_flag_ = 0;
   return nullptr;
 }
@@ -279,6 +275,12 @@ ThreadStatus SchedulesManager::status(void) {
     return manager_thread_->status();
   else
     return kThreadStopping;
+}
+
+void SchedulesManager::thread_quit(void) {
+  if (manager_thread_) {
+    manager_thread_->set_status(kThreadStopping);
+  }
 }
 
 static void EventSnapProcess(void *arg, int interval, int num) {

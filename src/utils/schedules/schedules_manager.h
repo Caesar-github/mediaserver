@@ -37,6 +37,7 @@ public:
   int record_stream_id_;
   int timed_video_enabled_;
   int timed_snap_enabled_;
+  int md_record_enabled_;
 
   SchedulesManager();
   virtual ~SchedulesManager();
@@ -44,6 +45,7 @@ public:
   virtual void stop(void) override;
   int running_status(void);
   ThreadStatus status(void);
+  void thread_quit(void);
 
   void SyncTime();
   void SyncSchedulesConfig();
@@ -58,7 +60,6 @@ public:
 private:
   std::chrono::steady_clock::time_point md_last_event_time_;
   int md_event_count_;
-  int md_record_enabled_;
   int md_trigger_enabled_;
   int timed_snap_quality_;
   int timed_snap_interval_;
