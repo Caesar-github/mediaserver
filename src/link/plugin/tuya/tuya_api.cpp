@@ -284,6 +284,7 @@ int TUYA_APP_Enable_Speaker_CB(int enable) {
     sample_info.fmt = SAMPLE_FMT_G711U;
     sample_info.channels = 1;
     sample_info.sample_rate = 8000;
+    sample_info.nb_samples = 320;
     easymedia::REFLECTOR(Stream)::DumpFactories();
 
     // 创建输出流
@@ -437,7 +438,8 @@ STATIC VOID __TUYA_APP_rev_audio_cb(
   //          p_audio_frame->buf_len, p_audio_frame->audio_codec,
   //          p_audio_frame->audio_sample, p_audio_frame->audio_databits,
   //          p_audio_frame->audio_channel);
-  out_stream->Write(p_audio_frame->p_audio_buf, p_audio_frame->buf_len, 1);
+  if (out_stream)
+    out_stream->Write(p_audio_frame->p_audio_buf, p_audio_frame->buf_len, 1);
 }
 
 int TuyaApi::TUYA_APP_Enable_P2PTransfer(IN UINT_T max_users) {
