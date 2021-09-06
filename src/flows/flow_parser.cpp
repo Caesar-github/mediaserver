@@ -608,10 +608,6 @@ int FlowParser::JsConfigParse() {
       if (flow_str.find(NODE_FLOW_NAME) != std::string::npos) {
         nlohmann::json flow_name_js = flow_js.at(NODE_FLOW_NAME);
         flow_unit->flow_name_ = flow_name_js.get<std::string>();
-        if (flow_name_js == "muxer_flow") {
-          LOG_ERROR("muxer_flow is temporarily not supported\n");
-          continue;
-        }
       }
       // Found Flow Param
       if (flow_str.find(NODE_FLOW_PARAM) != std::string::npos) {
