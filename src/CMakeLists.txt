@@ -79,6 +79,10 @@ if (${ENABLE_SCHEDULES_SERVER})
 endif() # ENABLE_SCHEDULES_SERVER
 endif() # ENABLE_DBUS
 
+if (${ENABLE_THIRDMEDIA})
+    set(MEDIASEVER_LIB ${MEDIASEVER_LIB} third_media)
+endif()
+
 if (${ENABLE_MINILOGGER})
     find_package(MiniLogger REQUIRED)
     add_definitions(-DENABLE_MINILOGGER)
