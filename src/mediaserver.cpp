@@ -14,12 +14,16 @@
 #define VENDOR_TUYA_LICENSE_ID 254
 #endif
 
-#ifdef ENABLE_CY43438
-#include <termios.h>
-#include <sys/ioctl.h>
+#ifdef THUNDER_BOOT
+#include <fcntl.h>
 #include <linux/serial.h>
-extern "C"{
-#include  "utils/CY_WL_API/wifi.h"
+#include <sys/ioctl.h>
+#include <termios.h>
+#endif
+
+#ifdef ENABLE_CY43438
+extern "C" {
+#include "utils/CY_WL_API/wifi.h"
 }
 #endif
 
@@ -48,38 +52,41 @@ static void parse_args(int argc, char **argv);
 static void *CY43438WifiInit(void *arg) {
   LOG_INFO("WIFI_Init begin\n");
   int ret = WIFI_Init();
-	if (ret) {
-		LOG_ERROR("WIFI_Init, err = %d\n", ret);
-		return NULL;
-	}
+  if (ret) {
+    LOG_ERROR("WIFI_Init, err = %d\n", ret);
+    return NULL;
+  }
   LOG_INFO("WIFI_Init success\n");
 
   ret = WIFI_Resume();
-	if (ret) {
-		LOG_ERROR("resume_enter, err = %d\n", ret);
-		return NULL;
-	}
+  if (ret) {
+    LOG_ERROR("resume_enter, err = %d\n", ret);
+    return NULL;
+  }
   LOG_INFO("WIFI_Resume success\n");
 
   ret = WIFI_GetStatus();
-	if (ret) { //if (wl_is_associated())
-		LOG_INFO("Already joined AP.\n");
-		rk_obtain_ip_from_vendor((char *)"wlan0");
+  if (ret) { // if (wl_is_associated())
+    LOG_INFO("Already joined AP.\n");
+    rk_obtain_ip_from_vendor((char *)"wlan0");
     LOG_INFO("rk_obtain_ip_from_vendor over.\n");
     system("aplay /etc/connect_success.wav &");
     // system("ping 111.231.160.125 -c 3 > /dev/kmsg 2>&1 & ");
-	} else {
+  } else {
     LOG_INFO("Not joined AP.\n");
     wifi_info_s wifi_info;
     LOG_INFO("get dhcp info from vendor\n");
-    ret = rkvendor_read(VENDOR_WIFI_INFO_ID, (char *)&wifi_info, sizeof(wifi_info));
+    ret = rkvendor_read(VENDOR_WIFI_INFO_ID, (char *)&wifi_info,
+                        sizeof(wifi_info));
     if (ret) {
       system("aplay /etc/no_connect_net.wav &");
       return NULL;
     }
 
-	  LOG_INFO("ssid:%s, psk:%s, ip_addr: %s, netmask: %s, gateway: %s, dns: %s\n",
-		          wifi_info.ssid, wifi_info.psk, wifi_info.ip_addr, wifi_info.netmask, wifi_info.gateway, wifi_info.dns);
+    LOG_INFO(
+        "ssid:%s, psk:%s, ip_addr: %s, netmask: %s, gateway: %s, dns: %s\n",
+        wifi_info.ssid, wifi_info.psk, wifi_info.ip_addr, wifi_info.netmask,
+        wifi_info.gateway, wifi_info.dns);
     if (strlen(wifi_info.ssid) && strlen(wifi_info.psk)) {
       if (WIFI_Connect(wifi_info.ssid, wifi_info.psk, 0)) {
         LOG_ERROR("WIFI_Connect fail\n");
@@ -95,64 +102,75 @@ static void *CY43438WifiInit(void *arg) {
         system("aplay /etc/connect_success.wav &");
       }
     }
-	}
+  }
 
   return NULL;
 }
+#else
+static void *AP6203WifiInit(void *arg) {
+  LOG_INFO("tb_start_wifi.sh begin\n");
+  system("tb_start_wifi.sh");
+  LOG_INFO("tb_start_wifi.sh over\n");
 
+  return NULL;
+}
+#endif
+
+#ifdef THUNDER_BOOT
 static void uart_to_mcu_poweroff() {
   int fd;
   int baud = B115200;
   struct termios newtio;
-	struct serial_rs485 rs485;
+  struct serial_rs485 rs485;
 
-	fd = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);
-	if (fd < 0) {
-		LOG_ERROR("Error opening serial port\n");
-		return;
-	}
+  fd = open("/dev/ttyS5", O_RDWR | O_NONBLOCK);
+  if (fd < 0) {
+    LOG_ERROR("Error opening serial port\n");
+    return;
+  }
 
-	bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
+  bzero(&newtio, sizeof(newtio)); /* clear struct for new port settings */
 
-	/* man termios get more info on below settings */
-	newtio.c_cflag = baud | CS8 | CLOCAL | CREAD;
-	newtio.c_iflag = 0;
-	newtio.c_oflag = 0;
-	newtio.c_lflag = 0;
-	// block for up till 128 characters
-	newtio.c_cc[VMIN] = 128;
-	// 0.5 seconds read timeout
-	newtio.c_cc[VTIME] = 5;
-	/* now clean the modem line and activate the settings for the port */
-	tcflush(fd, TCIOFLUSH);
-	tcsetattr(fd,TCSANOW,&newtio);
-  if(ioctl(fd, TIOCGRS485, &rs485) >= 0) {
+  /* man termios get more info on below settings */
+  newtio.c_cflag = baud | CS8 | CLOCAL | CREAD;
+  newtio.c_iflag = 0;
+  newtio.c_oflag = 0;
+  newtio.c_lflag = 0;
+  // block for up till 128 characters
+  newtio.c_cc[VMIN] = 128;
+  // 0.5 seconds read timeout
+  newtio.c_cc[VTIME] = 5;
+  /* now clean the modem line and activate the settings for the port */
+  tcflush(fd, TCIOFLUSH);
+  tcsetattr(fd, TCSANOW, &newtio);
+  if (ioctl(fd, TIOCGRS485, &rs485) >= 0) {
     /* disable RS485 */
-    rs485.flags &= ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
+    rs485.flags &=
+        ~(SER_RS485_ENABLED | SER_RS485_RTS_ON_SEND | SER_RS485_RTS_AFTER_SEND);
     rs485.delay_rts_after_send = 0;
     rs485.delay_rts_before_send = 0;
-    if(ioctl(fd, TIOCSRS485, &rs485) < 0) {
+    if (ioctl(fd, TIOCSRS485, &rs485) < 0) {
       perror("Error setting RS-232 mode");
     }
-	}
+  }
 
   /*
   * The flag ASYNC_SPD_CUST might have already been set, so
   * clear it to avoid confusing the kernel uart dirver.
   */
   struct serial_struct ss;
-	if (ioctl(fd, TIOCGSERIAL, &ss) < 0) {
-		// return silently as some devices do not support TIOCGSERIAL
+  if (ioctl(fd, TIOCGSERIAL, &ss) < 0) {
+    // return silently as some devices do not support TIOCGSERIAL
     LOG_INFO("return silently as some devices do not support TIOCGSERIAL\n");
-		return;
-	}
-	// if ((ss.flags & ASYNC_SPD_MASK) != ASYNC_SPD_CUST)
-	// 	return;
-	ss.flags &= ~ASYNC_SPD_MASK;
-	if (ioctl(fd, TIOCSSERIAL, &ss) < 0) {
-		LOG_ERROR("TIOCSSERIAL failed");
-		return;
-	}
+    return;
+  }
+  // if ((ss.flags & ASYNC_SPD_MASK) != ASYNC_SPD_CUST)
+  // 	return;
+  ss.flags &= ~ASYNC_SPD_MASK;
+  if (ioctl(fd, TIOCSSERIAL, &ss) < 0) {
+    LOG_ERROR("TIOCSSERIAL failed");
+    return;
+  }
 
   // write
   int written = write(fd, "\x11\x26", 4);
@@ -161,7 +179,7 @@ static void uart_to_mcu_poweroff() {
   else
     LOG_INFO("written is %d\n", written);
 }
-#endif // ENABLE_CY43438
+#endif // THUNDER_BOOT
 
 namespace rockchip {
 namespace mediaserver {
@@ -200,7 +218,7 @@ int MediaServer::InitMediaLink() {
 #ifdef LINK_VENDOR
       char vendor_data[256] = {0};
       if (rkvendor_read(VENDOR_TUYA_LICENSE_ID, vendor_data,
-                           sizeof(vendor_data) / sizeof(vendor_data[0]))) {
+                        sizeof(vendor_data) / sizeof(vendor_data[0]))) {
         LOG_INFO("rkvendor_read fail\n");
         system("aplay /etc/no_key.wav &");
         return -1;
@@ -274,6 +292,9 @@ MediaServer::MediaServer() {
 #ifdef ENABLE_CY43438
   pthread_t thread_id;
   pthread_create(&thread_id, NULL, CY43438WifiInit, NULL);
+#else
+  pthread_t thread_id;
+  pthread_create(&thread_id, NULL, AP6203WifiInit, NULL);
 #endif
 
 #ifdef ENABLE_DBUS
@@ -362,14 +383,24 @@ static void sigterm_handler(int sig) {
 #ifdef LINK_API_ENABLE
 #ifdef THUNDER_BOOT
   // StopRecord(0);
-  system("echo timer > /sys/class/leds/red/trigger");
+  system("echo timer > /sys/class/leds/white/trigger");
   auto &link_manager = rockchip::mediaserver::LinkManager::GetInstance();
   if (link_manager) {
     link_manager->ReportWakeUpData1();
-#ifdef ENABLE_CY43438
+
+    int fd, size;
+    char buf[200];
+    // fd = open("/sys/kernel/debug/tcp_keepalive_param/tcp_param", O_RDONLY);
+    fd = open("/proc/tcp_params", O_RDONLY);
+    memset(buf, 0, 200);
+    size = read(fd, buf, 200);
+    printf("[3 tcp_param: %d]: %s\n", size, buf);
+    system(buf);
+    system("dhd_priv wl tcpka_conn_enable 1 1 180 1 8");
+    system("dhd_priv setsuspendmode 1");
+
     if (sig == SIGQUIT)
       uart_to_mcu_poweroff();
-#endif
     link_manager->StopLink();
     link_manager->DeInitDevice();
   }
