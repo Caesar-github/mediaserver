@@ -58,6 +58,7 @@ void FlowParser::SyncCameraDBData(int id, std::string key, std::string value) {
 }
 
 void FlowParser::SyncEncoderDBData(int id, std::string key, std::string value) {
+  static int max_rate = 0;
   int pipe_index = GetPipeIndex(id, StreamType::CAMERA);
   if (pipe_index < 0)
     return;
@@ -70,9 +71,11 @@ void FlowParser::SyncEncoderDBData(int id, std::string key, std::string value) {
     encoder_flow_unit->SetGop(value);
   } else if (key == DB_VIDEO_MAX_RATE) {
     int bps = atoi(value.c_str()) * KB_UNITS;
+    max_rate = bps;
     encoder_flow_unit->SetMaxRate(std::to_string(bps));
   } else if (key == DB_VIDEO_BITRATE) {
     int bps = atoi(value.c_str()) * KB_UNITS;
+    bps = bps == 0 ? (max_rate == 0 ? 1024 : (max_rate / 2)) : bps;
     encoder_flow_unit->SetBitRate(std::to_string(bps));
   } else if (key == DB_VIDEO_MIN_RATE) {
     int bps = atoi(value.c_str()) * KB_UNITS;
@@ -551,7 +554,7 @@ void FlowParser::SyncSmartEncorde() {
     std::string smart = flow_unit->GetSmart();
     if (!smart.compare(DB_SMART_VALUE_CLOSE)) {
       LOG_INFO("smart is close, disable target and min bps\n");
-      flow_unit->SetBitRate(DB_SMART_DISABLE);
+      // flow_unit->SetBitRate(DB_SMART_DISABLE);
       flow_unit->SetMinRate(DB_SMART_DISABLE);
     }
   }
